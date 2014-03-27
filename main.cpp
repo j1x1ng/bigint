@@ -8,12 +8,20 @@
 
 #include <iostream>
 #include <string>
+#include <cstdlib>
+#include <ctime>
+#include <cstdio>
+
 using namespace std;
-const int siz = 100;
+const int siz = 300;
 const int err = -2;
+const int grand = 30;
+const int grand2 = 2147483647;
+const int tryK = 10;
 int A[siz], B[siz], C[siz], D[siz], M[siz];
 int ER[4*siz][2*siz];
 bool flag_of_er_init = false;
+bool flag_of_smallint_rand_init = false;
 ///0 : length
 ///1...a[0] : signed-digits
 
@@ -31,7 +39,7 @@ inline void bigint_adjust(int *c);
 inline void bigint_plus(int *a, int *b, int *c);
 inline void bigint_times(int *a, int *b, int *c);
 inline void bigint_divide(int *a, int *b, int *c, int *g);
-inline void bigint_pow(int *a, int *b, int *c, int *r); // a^b mod c
+inline void bigint_pow(int *a, int *b, int *m, int *r); // a^b mod c
 inline void bigint_ER_init();
 inline void bigint_minus(int *a, int *b, int *c);
 inline void bigint_cpy(int *a, int *b);
@@ -40,14 +48,25 @@ inline void bigint_dec(int *a);
 inline void bigint_divide_adjust(int *b, int *c, int *g, int *e);
 ///only use in bigint_divide(), dont refer to this func in other scope.
 
+inline void bigint_rand(int *a, int *b); // return a bigint in the range of [0...a-1]
+inline int smallint_rand(int a);
+inline void smallint_rand_init();
 bool bigint_isprime(int *a);
+int smallint_rand_general();
 
 int main(){
     ///a simple example including : (signed) a+b a*b a/b a^b (mod M)
-
+    ///another example shows how it work on prime_judgement(in a RP algo.)
     while(1){
-      cout << "input A, B, M (departed by spaces) :";
-
+        bigint_in(cin, M);
+        if(M[0] == err)
+          continue;
+        if(bigint_isprime(M))
+          cout << "Yes" << endl;
+        else
+          cout << "No" << endl;
+      //cout << "input A, B, M (departed by spaces) :";
+/*
       bigint_in(cin, A);
       bigint_in(cin, B);
       bigint_in(cin, M);
@@ -73,13 +92,93 @@ int main(){
       cout << "A^B = ";
       bigint_out(cout, C);
       cout << " ( mod M ) " << endl;
+
+      cout << "rand from [0...M-1] : ";
+      bigint_rand(M, C);
+      bigint_out(cout, C);
+      cout << endl;
+      getchar();*/
     }
     return 0;
 }
 
-bool bigint_isprime(int *a){
+inline void smallint_rand_init(){
+    srand(time(0));
+    rand();
+    flag_of_smallint_rand_init = true;
+    return ;
+}
 
-    return false;
+inline int smallint_rand(int a){
+    if(!flag_of_smallint_rand_init)
+      smallint_rand_init();
+    return (int)((double)a*(double)smallint_rand_general()/(double)grand2);
+}
+
+int smallint_rand_general(){
+    int r = 0;
+    for(int i = 0; i < grand; ++i){
+      r += rand()%2;
+      r *= 2;
+    }
+    return r;
+}
+
+inline void bigint_rand(int *a, int *b){
+    if(a[0]==err || a[ a[0] ]<0){
+      b[0] = err;
+      return ;
+    }
+    if(a[0]==1 && a[1]==0){
+      b[0] = 1;
+      b[1] = 0;
+      return ;
+    }
+    int c[siz], d[siz];
+    //bigint_fromint(0, c);
+    //bigint_fromint(0, d);
+    c[0] = siz-1;
+    c[ c[0] ] = smallint_rand(9)+1;
+    for(int i = 1; i < c[0]; ++i)
+      c[i] = smallint_rand(10);
+    bigint_divide(c, a, d, b);
+    return ;
+}
+
+bool bigint_isprime(int *a){
+    //561 is the min wrong ans.
+    if(a[0] == err)
+      return false;
+    if(a[0]==1 && a[1]==1)
+      return false;
+
+    int b[siz], c[siz], d[siz], e[siz];
+    bool flag = true;
+    /// b^a == b mod a
+    bigint_cpy(a, d);
+    bigint_cpy(a, e);
+    for(int i = 0; i < tryK; ++i){
+      bigint_cpy(e, a);
+      //cerr << "--->" << i << endl;
+      bigint_fromint(0, b);
+      bigint_fromint(0, c);
+      bigint_rand(a, b);
+
+      bigint_cpy(e, a);
+      bigint_cpy(e, d);
+      bigint_pow(b, a, d, c);
+      //bigint_out(cerr, b);
+      //cerr << endl;
+      //bigint_out(cerr, e);
+      //cerr << endl;
+      //bigint_out(cerr, c);
+      //cerr << endl;
+      if(bigint_comp(b, c) != 0){
+        flag = false;
+        break;
+      }
+    }
+    return flag;
 }
 
 int bigint_comp(int *a, int b){
@@ -146,31 +245,34 @@ inline void bigint_ER_init(){
     return ;
 }
 
-inline void bigint_pow(int *a, int *b, int *c, int *r){
+inline void bigint_pow(int *a, int *b, int *m, int *r){
 
-    ///a^b mod c a>0 && b>0 && c!=0
-
-    if(a[0]==err || b[0]==err || a[ a[0] ]<0 || b[ b[0] ]<0 || (c[1]==0&&c[0]==1)){
+    ///a^b mod c a>=0 && b>0 && c!=0
+    if(a[0]==err || b[0]==err || a[ a[0] ]<0 || b[ b[0] ]<0 || (m[1]==0&&m[0]==1)){
       r[0] = err;
+      return ;
+    }
+    if(a[0]==1 && a[1]==0){
+      r[0] = 1;
+      r[1] = 0;
       return ;
     }
     if(!flag_of_er_init)
       bigint_ER_init();
-
     int l = b[0]*4, CC=0;
     int d[2][siz], e[siz];
     bigint_fromint(1, d[0]);
 
     for(int i = l; i >= 0; --i){
       bigint_times(d[CC], d[CC],e);
-      bigint_divide(e, c, d[1-CC], d[CC]);
+      bigint_divide(e, m, d[1-CC], d[CC]);
       if(bigint_comp(ER[i], b) <= 0){
         bigint_fromint(0, e);
         bigint_minus(b, ER[i], e);
         bigint_cpy(e, b);
         bigint_fromint(0, e);
         bigint_times(d[CC], a, e);
-        bigint_divide(e, c, d[CC], d[1-CC]);
+        bigint_divide(e, m, d[CC], d[1-CC]);
         CC = 1 - CC;
       }
       //bigint_out(cerr, d[CC]);cerr << endl;
